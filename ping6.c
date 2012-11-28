@@ -131,6 +131,8 @@ __RCSID("$NetBSD: ping6.c,v 1.73 2010/09/20 11:49:48 ahoka Exp $");
 #include <unistd.h>
 #include <poll.h>
 
+#include <private/android_filesystem_config.h>
+
 #ifdef IPSEC
 #include <netinet6/ah.h>
 #include <netinet6/ipsec.h>
@@ -298,6 +300,23 @@ char	*nigroup(char *);
 void	 usage(void);
 
 int
+isInSupplementaryGroup(gid_t group)
+{
+	int numgroups, i;
+	gid_t groups[sysconf(_SC_NGROUPS_MAX) + 1];
+	numgroups = getgroups(sizeof(groups) / sizeof(groups[0]), groups);
+	if (numgroups < 0) {
+		perror("getgroups");
+		return 0;
+	}
+	for (i = 0; i < numgroups; i++) {
+		if (group == groups[i])
+			return 1;
+	}
+	return 0;
+}
+
+int
 main(int argc, char *argv[])
 {
 	struct itimerval itimer;
@@ -330,6 +349,11 @@ main(int argc, char *argv[])
 #ifdef IPV6_USE_MIN_MTU
 	int mflag = 0;
 #endif
+
+	if (getuid() != 0 && !isInSupplementaryGroup(AID_INET)) {
+		fprintf(stderr, "%s: not root or in group AID_INET\n", argv[0]);
+		exit(3);
+	}
 
 	/* just to be sure */
 	memset(&smsghdr, 0, sizeof(smsghdr));
